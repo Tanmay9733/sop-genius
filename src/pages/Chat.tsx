@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Book, FileText } from "lucide-react";
-import Navbar from "@/components/layout/Navbar";
+import { Upload, Settings2, MoreVertical, ArrowRight, Menu, PanelLeft, PanelRight } from "lucide-react";
 import ChatMessage, { Message, Citation } from "@/components/chat/ChatMessage";
-import ChatInput from "@/components/chat/ChatInput";
-import SourcePanel from "@/components/chat/SourcePanel";
+import SourcesPanel from "@/components/chat/SourcesPanel";
+import StudioPanel from "@/components/chat/StudioPanel";
 import PDFPreviewModal from "@/components/chat/PDFPreviewModal";
 import { Button } from "@/components/ui/button";
 
@@ -33,9 +32,16 @@ const Chat = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showSources, setShowSources] = useState(false);
+  const [input, setInput] = useState("");
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [showSourcesPanel, setShowSourcesPanel] = useState(true);
+  const [showStudioPanel, setShowStudioPanel] = useState(true);
+  const [showMobileMenu, setShowMobileMenu] = useState<"sources" | "studio" | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Demo sources
+  const [sources] = useState<{ id: string; name: string; type: "pdf" | "website" | "text"; status: "ready" | "processing" }[]>([]);
 
   // Get all citations from messages
   const allCitations = messages
@@ -50,7 +56,12 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+    
+    const content = input.trim();
+    setInput("");
+    
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -85,52 +96,129 @@ const Chat = () => {
     setIsLoading(false);
   };
 
-  const handleCitationClick = (citation: Citation) => {
-    setSelectedCitation(citation);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
-  const handleLogout = () => {
-    navigate("/");
+  const handleCitationClick = (citation: Citation) => {
+    setSelectedCitation(citation);
+    setShowMobileMenu(null);
+  };
+
+  const handleAddSource = () => {
+    // Navigate to upload or open upload modal
+    navigate("/admin/upload");
   };
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <Navbar isLoggedIn onLogout={handleLogout} />
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between p-3 border-b border-border bg-card">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowMobileMenu(showMobileMenu === "sources" ? null : "sources")}
+        >
+          <PanelLeft className="w-5 h-5" />
+        </Button>
+        <h1 className="font-semibold text-foreground">Chat</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowMobileMenu(showMobileMenu === "studio" ? null : "studio")}
+        >
+          <PanelRight className="w-5 h-5" />
+        </Button>
+      </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Sources Panel - Desktop */}
+        <div className={`hidden md:flex w-80 flex-shrink-0 transition-all duration-300 ${showSourcesPanel ? '' : '-ml-80'}`}>
+          <SourcesPanel
+            sources={sources}
+            citations={allCitations}
+            onAddSource={handleAddSource}
+            onCitationClick={handleCitationClick}
+            className="w-full"
+          />
+        </div>
+
+        {/* Sources Panel - Mobile Overlay */}
+        {showMobileMenu === "sources" && (
+          <div className="md:hidden absolute inset-0 z-40 flex">
+            <div className="w-80 max-w-[85vw]">
+              <SourcesPanel
+                sources={sources}
+                citations={allCitations}
+                onAddSource={handleAddSource}
+                onCitationClick={handleCitationClick}
+                onClose={() => setShowMobileMenu(null)}
+                className="w-full h-full"
+              />
+            </div>
+            <div 
+              className="flex-1 bg-foreground/20 backdrop-blur-sm"
+              onClick={() => setShowMobileMenu(null)}
+            />
+          </div>
+        )}
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0 border-x border-border bg-background">
+          {/* Chat Header - Desktop */}
+          <div className="hidden md:flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowSourcesPanel(!showSourcesPanel)}
+              >
+                <PanelLeft className="w-4 h-4" />
+              </Button>
+              <h1 className="font-semibold text-foreground">Chat</h1>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings2 className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowStudioPanel(!showStudioPanel)}
+              >
+                <PanelRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                  <FileText className="w-8 h-8 text-primary" />
+                <div className="w-14 h-14 rounded-full bg-secondary/50 flex items-center justify-center mb-4">
+                  <Upload className="w-6 h-6 text-primary" />
                 </div>
                 <h2 className="text-xl font-semibold text-foreground mb-2">
-                  Ask about your company procedures
+                  Add a source to get started
                 </h2>
-                <p className="text-muted-foreground max-w-md mb-8">
-                  I can answer questions using your uploaded SOP documents. Every answer includes source citations you can verify.
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                  {[
-                    "How do I process a refund?",
-                    "What's the password policy?",
-                    "How do I submit expenses?",
-                  ].map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => handleSendMessage(suggestion)}
-                      className="px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-full text-sm transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
+                <Button 
+                  onClick={handleAddSource}
+                  variant="outline"
+                  className="mt-4"
+                >
+                  Upload a source
+                </Button>
               </div>
             ) : (
-              <>
+              <div className="max-w-3xl mx-auto space-y-4">
                 {messages.map((message) => (
                   <ChatMessage
                     key={message.id}
@@ -138,37 +226,72 @@ const Chat = () => {
                     onCitationClick={handleCitationClick}
                   />
                 ))}
+                {isLoading && (
+                  <div className="flex justify-start animate-fade-in">
+                    <div className="chat-bubble-assistant px-4 py-3">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
-              </>
+              </div>
             )}
           </div>
 
-          {/* Input */}
-          <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+          {/* Chat Input */}
+          <div className="p-4 border-t border-border bg-card/50">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-center gap-3 bg-secondary/50 rounded-xl border border-border p-2 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Upload a source to get started"
+                  rows={1}
+                  className="flex-1 resize-none bg-transparent border-0 outline-none text-sm px-2 py-2 placeholder:text-muted-foreground min-h-[40px] max-h-[120px]"
+                  style={{ height: "auto" }}
+                />
+                <div className="flex items-center gap-2 pr-2">
+                  <span className="text-xs text-muted-foreground">{sources.length} sources</span>
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!input.trim() || isLoading}
+                    size="icon"
+                    className="h-8 w-8 rounded-full bg-primary hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Source Toggle Button (Mobile) */}
-        {allCitations.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSources(!showSources)}
-            className="fixed bottom-24 right-4 md:hidden z-40 shadow-lg"
-          >
-            <Book className="w-4 h-4 mr-2" />
-            Sources ({allCitations.length})
-          </Button>
+        {/* Studio Panel - Desktop */}
+        <div className={`hidden md:flex w-80 flex-shrink-0 transition-all duration-300 ${showStudioPanel ? '' : '-mr-80'}`}>
+          <StudioPanel className="w-full" />
+        </div>
+
+        {/* Studio Panel - Mobile Overlay */}
+        {showMobileMenu === "studio" && (
+          <div className="md:hidden absolute inset-0 z-40 flex justify-end">
+            <div 
+              className="flex-1 bg-foreground/20 backdrop-blur-sm"
+              onClick={() => setShowMobileMenu(null)}
+            />
+            <div className="w-80 max-w-[85vw]">
+              <StudioPanel 
+                onClose={() => setShowMobileMenu(null)}
+                className="w-full h-full" 
+              />
+            </div>
+          </div>
         )}
-
-        {/* Source Panel (Desktop) */}
-        <div className="hidden md:block">
-          <SourcePanel
-            citations={allCitations}
-            isOpen={allCitations.length > 0}
-            onClose={() => {}}
-            onCitationClick={handleCitationClick}
-          />
-        </div>
       </div>
 
       {/* PDF Preview Modal */}
